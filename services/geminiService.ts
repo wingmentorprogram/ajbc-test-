@@ -4,7 +4,7 @@ import { LogicLogEntry } from "../types";
 
 // Initialize Gemini
 // NOTE: Process.env.API_KEY is handled by the environment as per instructions.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 /**
  * Analyzes a natural language query about the spreadsheet and returns the most relevant Row ID.
