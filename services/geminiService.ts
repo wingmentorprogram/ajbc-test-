@@ -2,15 +2,29 @@ import { GoogleGenAI } from "@google/genai";
 import { MOCK_SPREADSHEET_DATA } from "../constants";
 import { LogicLogEntry } from "../types";
 
-// Initialize Gemini
-// NOTE: Process.env.API_KEY is handled by the environment as per instructions.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Initialize Gemini lazily to prevent runtime crashes during module loading
+// if the API key is missing or env vars are not yet fully hydrated.
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = (): GoogleGenAI => {
+  if (!aiInstance) {
+    const apiKey = process.env.API_KEY as string;
+    if (!apiKey) {
+      console.warn("API Key is missing. AI features will not work.");
+      // We still initialize to allow the app to run, SDK might throw later on request
+      return new GoogleGenAI({ apiKey: "MISSING_KEY" });
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 /**
  * Analyzes a natural language query about the spreadsheet and returns the most relevant Row ID.
  */
 export const findFormulaLogic = async (query: string): Promise<{ rowId: string | null; explanation: string }> => {
   try {
+    const ai = getAI();
     const dataContext = JSON.stringify(MOCK_SPREADSHEET_DATA.map(row => ({
       id: row.id,
       item: row.item,
@@ -46,7 +60,7 @@ export const findFormulaLogic = async (query: string): Promise<{ rowId: string |
 
   } catch (error) {
     console.error("Gemini Search Error:", error);
-    return { rowId: null, explanation: "Could not interpret query." };
+    return { rowId: null, explanation: "Could not interpret query. Check API Key configuration." };
   }
 };
 
@@ -55,6 +69,7 @@ export const findFormulaLogic = async (query: string): Promise<{ rowId: string |
  */
 export const generateClaimNarrative = async (logs: LogicLogEntry[]): Promise<string> => {
     try {
+        const ai = getAI();
         const logSummary = logs.map(l => `- [${l.timestamp.toLocaleTimeString()}] ${l.type}: ${l.description} (${l.details || ''})`).join('\n');
         
         const prompt = `
@@ -79,6 +94,6 @@ export const generateClaimNarrative = async (logs: LogicLogEntry[]): Promise<str
         return response.text || "Unable to generate narrative.";
     } catch (e) {
         console.error(e);
-        return "Error generating claim narrative. Please try again.";
+        return "Error generating claim narrative. Please check API configuration and try again.";
     }
 }
